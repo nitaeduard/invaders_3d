@@ -11,17 +11,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm' # built-in caching support via setup-node
+
       - name: Install dependencies
-        run: npm ci
+        run: |
+          # Use npm ci if a lockfile exists for deterministic installs, otherwise fall back to npm install
+          if [ -f package-lock.json ]; then
+            echo "Lockfile found: using npm ci"
+            npm ci
+          else
+            echo "No lockfile found: using npm install (consider committing package-lock.json)"
+            npm install
+          fi
+
       - name: Type check
         run: npm run type-check
+
       - name: Build
         run: npm run build
+
       - name: Lint
         run: npm run lint || true
+
       - name: Run tests
         run: npm run test || true
