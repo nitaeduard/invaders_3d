@@ -29,7 +29,7 @@ const SpaceInvaders3D: React.FC = () => {
         if (saved) {
           setHighScore(parseInt(saved, 10));
         }
-      } catch (err) {
+      } catch {
         // Keep silent if storage is not available
         console.log('No high score found');
       }
@@ -139,8 +139,10 @@ const SpaceInvaders3D: React.FC = () => {
     camera.lookAt(0, 0, -10);
 
     // Make AudioContext creation TS-safe
-    const AudioConstructor: any = (window as any).AudioContext || (window as any).webkitAudioContext;
-    const audioContext: AudioContext = new AudioConstructor();
+    type AudioCtor = { new (): AudioContext };
+    const _win = window as unknown as { AudioContext?: AudioCtor; webkitAudioContext?: AudioCtor };
+    const AudioConstructor = _win.AudioContext || _win.webkitAudioContext;
+    const audioContext: AudioContext = new (AudioConstructor as AudioCtor)();
     let audioInitialized = false;
     let alarmOscillator: OscillatorNode | null = null;
     let alarmGain: GainNode | null = null;
@@ -170,20 +172,19 @@ const SpaceInvaders3D: React.FC = () => {
       alarmOscillator.start();
 
       // store id so we can clear if needed
-      const alarmToggleId = window.setInterval(() => {
+      window.setInterval(() => {
         if (alarmOscillator) {
           alarmOscillator.frequency.value = alarmOscillator.frequency.value === 880 ? 1100 : 880;
         }
       }, 200);
-      // keep interval id in alarmGain.userData for cleanup if desired (not necessary here)
-      (alarmGain as any).__toggleId = alarmToggleId;
+      // interval id stored locally; no need to attach to DOM nodes
     };
 
     const stopAlarm = () => {
       if (alarmOscillator) {
         try {
           alarmOscillator.stop();
-        } catch (e) {
+        } catch {
           // ignore stop errors
         }
         alarmOscillator = null;
@@ -365,7 +366,7 @@ const SpaceInvaders3D: React.FC = () => {
     let lastTimeUpdate = Date.now();
     let isInvincible = false;
     let flickerInterval: number | null = null;
-    let cameraShake = { x: 0, y: 0, intensity: 0 };
+    const cameraShake = { x: 0, y: 0, intensity: 0 };
     let currentCombo = 0;
     let currentMultiplier = 1;
     let lastKillTime = 0;
@@ -374,7 +375,7 @@ const SpaceInvaders3D: React.FC = () => {
     let dashCooldownTime = 0;
     let slowCooldownTime = 0;
     let bombCooldownTime = 0;
-    let wavesPerLevel = 3;
+    const wavesPerLevel = 3;
 
     const shakeScreen = (intensity: number) => {
       cameraShake.intensity = intensity;
@@ -1124,7 +1125,7 @@ const SpaceInvaders3D: React.FC = () => {
               // find a Mesh child whose geometry is a BoxGeometry (body)
               const bodyMesh = enemy.children.find((child: THREE.Object3D) => {
                 const mesh = child as THREE.Mesh;
-                return mesh.geometry !== undefined && (mesh.geometry as any).type === 'BoxGeometry';
+                return mesh.geometry instanceof THREE.BoxGeometry;
               }) as THREE.Mesh | undefined;
               if (bodyMesh) {
                 (bodyMesh.material as THREE.MeshPhongMaterial).emissive.setRGB(1, 0, 0);
