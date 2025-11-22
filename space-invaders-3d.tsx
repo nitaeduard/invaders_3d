@@ -4,13 +4,34 @@ import * as THREE from 'three';
 const SpaceInvaders3D = () => {
   const mountRef = useRef(null);
   const [score, setScore] = useState(0);
+  const [highScore, setHighScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [lives, setLives] = useState(3);
   const [level, setLevel] = useState(1);
+  const [wave, setWave] = useState(1);
   const [timeLeft, setTimeLeft] = useState(60);
+  const [combo, setCombo] = useState(0);
+  const [multiplier, setMultiplier] = useState(1);
+  const [shield, setShield] = useState(0);
+  const [powerup, setPowerup] = useState(null);
+  const [dashCooldown, setDashCooldown] = useState(0);
+  const [slowCooldown, setSlowCooldown] = useState(0);
+  const [bombCooldown, setBombCooldown] = useState(0);
 
   useEffect(() => {
     if (!mountRef.current) return;
+
+    const loadHighScore = async () => {
+      try {
+        const result = await window.storage.get('space-invaders-highscore');
+        if (result && result.value) {
+          setHighScore(parseInt(result.value));
+        }
+      } catch (err) {
+        console.log('No high score found');
+      }
+    };
+    loadHighScore();
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000510);
@@ -27,36 +48,89 @@ const SpaceInvaders3D = () => {
     directionalLight.position.set(0, 10, 10);
     scene.add(directionalLight);
 
-    const shipGroup = new THREE.Group();
+    const nebulaGeometry = new THREE.SphereGeometry(100, 32, 32);
+    const nebulaMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        varying vec2 vUv;
+        void main() {
+          vec2 uv = vUv * 2.0 - 1.0;
+          float dist = length(uv);
+          vec3 color1 = vec3(0.1, 0.0, 0.3);
+          vec3 color2 = vec3(0.3, 0.0, 0.5);
+          vec3 color = mix(color1, color2, sin(dist * 3.0 + time * 0.5) * 0.5 + 0.5);
+          gl_FragColor = vec4(color * 0.3, 1.0);
+        }
+      `,
+      side: THREE.BackSide
+    });
+    const nebula = new THREE.Mesh(nebulaGeometry, nebulaMaterial);
+    scene.add(nebula);
+
+    const createShip = (color, emissive) => {
+      const shipGroup = new THREE.Group();
+      
+      const bodyGeometry = new THREE.ConeGeometry(0.5, 2, 4);
+      const bodyMaterial = new THREE.MeshPhongMaterial({ color: color, emissive: emissive });
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      body.rotation.x = Math.PI / 2;
+      shipGroup.add(body);
+      
+      const wingGeometry = new THREE.BoxGeometry(2, 0.2, 1);
+      const wingMaterial = new THREE.MeshPhongMaterial({ color: color, emissive: emissive });
+      const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
+      leftWing.position.set(-1.5, 0, 0);
+      shipGroup.add(leftWing);
+      
+      const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+      rightWing.position.set(1.5, 0, 0);
+      shipGroup.add(rightWing);
+      
+      const tipGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+      const tipMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, emissive: 0x444400 });
+      const leftTip = new THREE.Mesh(tipGeometry, tipMaterial);
+      leftTip.position.set(-2.5, 0, 0);
+      shipGroup.add(leftTip);
+      
+      const rightTip = new THREE.Mesh(tipGeometry, tipMaterial);
+      rightTip.position.set(2.5, 0, 0);
+      shipGroup.add(rightTip);
+      
+      return shipGroup;
+    };
+
+    const ship1 = createShip(0x00ff00, 0x004400);
+    ship1.position.set(-2, 0, 0);
+    scene.add(ship1);
+
+    const ship2 = createShip(0x0000ff, 0x000044);
+    ship2.position.set(2, 0, 0);
+    scene.add(ship2);
+
+    const shieldGeometry = new THREE.SphereGeometry(1.5, 16, 16);
+    const shieldMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0x00ffff, 
+      transparent: true, 
+      opacity: 0.3,
+      wireframe: true
+    });
+    const shield1 = new THREE.Mesh(shieldGeometry, shieldMaterial);
+    shield1.visible = false;
+    ship1.add(shield1);
     
-    const bodyGeometry = new THREE.ConeGeometry(0.5, 2, 4);
-    const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, emissive: 0x004400 });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.rotation.x = Math.PI / 2;
-    shipGroup.add(body);
-    
-    const wingGeometry = new THREE.BoxGeometry(2, 0.2, 1);
-    const wingMaterial = new THREE.MeshPhongMaterial({ color: 0x00cc00, emissive: 0x003300 });
-    const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
-    leftWing.position.set(-1.5, 0, 0);
-    shipGroup.add(leftWing);
-    
-    const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
-    rightWing.position.set(1.5, 0, 0);
-    shipGroup.add(rightWing);
-    
-    const tipGeometry = new THREE.SphereGeometry(0.15, 8, 8);
-    const tipMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, emissive: 0x444400 });
-    const leftTip = new THREE.Mesh(tipGeometry, tipMaterial);
-    leftTip.position.set(-2.5, 0, 0);
-    shipGroup.add(leftTip);
-    
-    const rightTip = new THREE.Mesh(tipGeometry, tipMaterial);
-    rightTip.position.set(2.5, 0, 0);
-    shipGroup.add(rightTip);
-    
-    shipGroup.position.set(0, 0, 0);
-    scene.add(shipGroup);
+    const shield2 = new THREE.Mesh(shieldGeometry, shieldMaterial.clone());
+    shield2.visible = false;
+    ship2.add(shield2);
 
     camera.position.set(0, 8, 12);
     camera.lookAt(0, 0, -10);
@@ -124,7 +198,7 @@ const SpaceInvaders3D = () => {
       oscillator.stop(audioContext.currentTime + 0.1);
     };
 
-    const playExplosionSound = () => {
+    const playExplosionSound = (enemyType) => {
       initAudio();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
@@ -133,14 +207,28 @@ const SpaceInvaders3D = () => {
       gainNode.connect(audioContext.destination);
       
       oscillator.type = 'sawtooth';
-      oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.2);
       
-      gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+      if (enemyType === 'tank') {
+        oscillator.frequency.setValueAtTime(100, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(30, audioContext.currentTime + 0.3);
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        oscillator.stop(audioContext.currentTime + 0.3);
+      } else if (enemyType === 'scout') {
+        oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.15);
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+        oscillator.stop(audioContext.currentTime + 0.15);
+      } else {
+        oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.2);
+        gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        oscillator.stop(audioContext.currentTime + 0.2);
+      }
       
       oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.2);
     };
 
     const playLevelCompleteSound = () => {
@@ -187,16 +275,14 @@ const SpaceInvaders3D = () => {
       stars.push(star);
     }
 
-    const leftCrosshairGroup = new THREE.Group();
-    const rightCrosshairGroup = new THREE.Group();
-    const crosshairMaterial = new THREE.LineBasicMaterial({ 
-      color: 0x00ff00, 
-      transparent: true, 
-      opacity: 0.4 
-    });
-    
-    const createCrosshair = () => {
+    // Create crosshairs for both players
+    const createCrosshair = (color) => {
       const group = new THREE.Group();
+      const crosshairMaterial = new THREE.LineBasicMaterial({ 
+        color: color, 
+        transparent: true, 
+        opacity: 0.4 
+      });
       
       const verticalGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, -0.4, 0),
@@ -214,7 +300,7 @@ const SpaceInvaders3D = () => {
       
       const dotGeometry = new THREE.SphereGeometry(0.06, 8, 8);
       const dotMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0x00ff00, 
+        color: color, 
         transparent: true, 
         opacity: 0.6 
       });
@@ -224,31 +310,85 @@ const SpaceInvaders3D = () => {
       return group;
     };
     
-    leftCrosshairGroup.add(createCrosshair());
-    rightCrosshairGroup.add(createCrosshair());
+    // Player 1 crosshairs (green)
+    const leftCrosshair1 = createCrosshair(0x00ff00);
+    const rightCrosshair1 = createCrosshair(0x00ff00);
+    leftCrosshair1.position.set(-2.5, 0, -40);
+    rightCrosshair1.position.set(2.5, 0, -40);
+    scene.add(leftCrosshair1);
+    scene.add(rightCrosshair1);
     
-    leftCrosshairGroup.position.set(-2.5, 0, -40);
-    rightCrosshairGroup.position.set(2.5, 0, -40);
-    scene.add(leftCrosshairGroup);
-    scene.add(rightCrosshairGroup);
+    // Player 2 crosshairs (blue)
+    const leftCrosshair2 = createCrosshair(0x0000ff);
+    const rightCrosshair2 = createCrosshair(0x0000ff);
+    leftCrosshair2.position.set(-2.5, 0, -40);
+    rightCrosshair2.position.set(2.5, 0, -40);
+    scene.add(leftCrosshair2);
+    scene.add(rightCrosshair2);
 
     let enemies = [];
     const bullets = [];
     const enemyBullets = [];
     const particles = [];
-    const keys = { left: false, right: false, up: false, down: false, space: false };
+    const muzzleFlashes = [];
+    const powerups = [];
+    const keys1 = { left: false, right: false, up: false, down: false, space: false, dash: false, slow: false, bomb: false };
+    const keys2 = { left: false, right: false, up: false, down: false, space: false, dash: false, slow: false, bomb: false };
     let enemySpeed = 0.015;
-    let lastShot = 0;
-    let alternateGun = false;
+    let lastShot1 = 0;
+    let lastShot2 = 0;
+    let alternateGun1 = false;
+    let alternateGun2 = false;
     let currentScore = 0;
     let currentLevel = 1;
+    let currentWave = 1;
     let currentLives = 3;
+    let currentHighScore = 0;
+    let currentShield = 0;
+    let currentPowerup = null;
+    let powerupEndTime = 0;
     let isGameOver = false;
     let isPaused = false;
     let currentTimeLeft = 60;
     let lastTimeUpdate = Date.now();
     let isInvincible = false;
     let flickerInterval = null;
+    let cameraShake = { x: 0, y: 0, intensity: 0 };
+    let currentCombo = 0;
+    let currentMultiplier = 1;
+    let lastKillTime = 0;
+    let comboTimeout = null;
+    let timeScale = 1;
+    let dashCooldownTime = 0;
+    let slowCooldownTime = 0;
+    let bombCooldownTime = 0;
+    let wavesPerLevel = 3;
+
+    const shakeScreen = (intensity) => {
+      cameraShake.intensity = intensity;
+    };
+
+    const addKill = () => {
+      const now = Date.now();
+      if (now - lastKillTime < 2000) {
+        currentCombo++;
+        currentMultiplier = Math.min(1 + Math.floor(currentCombo / 3), 5);
+      } else {
+        currentCombo = 1;
+        currentMultiplier = 1;
+      }
+      lastKillTime = now;
+      setCombo(currentCombo);
+      setMultiplier(currentMultiplier);
+      
+      if (comboTimeout) clearTimeout(comboTimeout);
+      comboTimeout = setTimeout(() => {
+        currentCombo = 0;
+        currentMultiplier = 1;
+        setCombo(0);
+        setMultiplier(1);
+      }, 2000);
+    };
 
     const createExplosion = (position, color) => {
       const particleCount = 8;
@@ -277,7 +417,45 @@ const SpaceInvaders3D = () => {
       }
     };
 
-    const createEnemies = (level) => {
+    const createMuzzleFlash = (position) => {
+      const flashGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+      const flashMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0xffff00,
+        transparent: true,
+        opacity: 1
+      });
+      const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+      flash.position.copy(position);
+      flash.userData.lifetime = 5;
+      flash.userData.age = 0;
+      scene.add(flash);
+      muzzleFlashes.push(flash);
+    };
+
+    const createPowerup = (position) => {
+      if (Math.random() > 0.3) return;
+      
+      const types = ['shield', 'rapid', 'spread', 'laser'];
+      const type = types[Math.floor(Math.random() * types.length)];
+      
+      const colors = {
+        shield: 0x00ffff,
+        rapid: 0xff00ff,
+        spread: 0xffff00,
+        laser: 0xff0000
+      };
+      
+      const powerupGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+      const powerupMaterial = new THREE.MeshBasicMaterial({ color: colors[type] });
+      const powerup = new THREE.Mesh(powerupGeometry, powerupMaterial);
+      powerup.position.copy(position);
+      powerup.userData.type = type;
+      powerup.userData.velocity = 0.1;
+      scene.add(powerup);
+      powerups.push(powerup);
+    };
+
+    const createEnemies = (level, wave, formation = 'wall') => {
       const rows = 3 + Math.floor(level / 2);
       const cols = 5 + Math.floor(level / 2);
       const startZ = -40 - (level * 5);
@@ -286,9 +464,41 @@ const SpaceInvaders3D = () => {
         for (let col = 0; col < cols; col++) {
           const enemyGroup = new THREE.Group();
           
+          let enemyType = 'normal';
+          const rand = Math.random();
+          if (level >= 3 && rand < 0.2) enemyType = 'scout';
+          else if (level >= 5 && rand < 0.15) enemyType = 'tank';
+          else if (level >= 7 && rand < 0.1) enemyType = 'zigzag';
+          
           const hue = (level * 0.1 + row * 0.1) % 1;
-          const enemyColor = new THREE.Color().setHSL(hue, 1, 0.5);
-          const enemyEmissive = new THREE.Color().setHSL(hue, 1, 0.2);
+          let enemyColor, enemyEmissive, scale, health, speed;
+          
+          if (enemyType === 'scout') {
+            enemyColor = new THREE.Color(0xff00ff);
+            enemyEmissive = new THREE.Color(0x440044);
+            scale = 0.7;
+            health = 1;
+            speed = 2.5;
+          } else if (enemyType === 'tank') {
+            enemyColor = new THREE.Color(0xff8800);
+            enemyEmissive = new THREE.Color(0x442200);
+            scale = 1.4;
+            health = 3;
+            speed = 0.6;
+          } else if (enemyType === 'zigzag') {
+            enemyColor = new THREE.Color(0x00ffff);
+            enemyEmissive = new THREE.Color(0x004444);
+            scale = 1;
+            health = 2;
+            speed = 1.3;
+          } else {
+            enemyColor = new THREE.Color().setHSL(hue, 1, 0.5);
+            enemyEmissive = new THREE.Color().setHSL(hue, 1, 0.2);
+            scale = 1;
+            health = 1;
+            speed = 1;
+          }
+          
           const enemyMaterial = new THREE.MeshPhongMaterial({ 
             color: enemyColor,
             emissive: enemyEmissive
@@ -329,14 +539,36 @@ const SpaceInvaders3D = () => {
           rightEye.position.set(0.3, 0.1, 0.4);
           enemyGroup.add(rightEye);
           
-          enemyGroup.position.set(
-            col * 2.5 - (cols * 2.5) / 2 + 1.25,
-            row * 2.5 - (rows * 2.5) / 2 + 1.25,
-            startZ
-          );
+          enemyGroup.scale.set(scale, scale, scale);
+          
+          let xPos, yPos;
+          if (formation === 'circle') {
+            const angle = (col / cols) * Math.PI * 2;
+            const radius = 10;
+            xPos = Math.cos(angle) * radius;
+            yPos = Math.sin(angle) * radius;
+          } else if (formation === 'v') {
+            xPos = col * 2.5 - (cols * 2.5) / 2 + 1.25;
+            yPos = Math.abs(col - cols/2) * 1.5 + row * 2.5 - (rows * 2.5) / 2;
+          } else {
+            xPos = col * 2.5 - (cols * 2.5) / 2 + 1.25;
+            yPos = row * 2.5 - (rows * 2.5) / 2 + 1.25;
+          }
+          
+          enemyGroup.position.set(xPos, yPos, startZ);
           
           enemyGroup.userData.alive = true;
           enemyGroup.userData.color = enemyColor;
+          enemyGroup.userData.type = enemyType;
+          enemyGroup.userData.health = health;
+          enemyGroup.userData.maxHealth = health;
+          enemyGroup.userData.speed = speed;
+          enemyGroup.userData.zigzagTime = 0;
+          enemyGroup.userData.circleTime = 0;
+          enemyGroup.userData.originalX = xPos;
+          enemyGroup.userData.originalY = yPos;
+          enemyGroup.userData.formation = formation;
+          
           scene.add(enemyGroup);
           enemies.push(enemyGroup);
         }
@@ -345,48 +577,98 @@ const SpaceInvaders3D = () => {
       enemySpeed = 0.015 + (level * 0.005);
     };
 
-    createEnemies(currentLevel);
+    const formations = ['wall', 'circle', 'v'];
+    createEnemies(currentLevel, currentWave, formations[currentWave % formations.length]);
 
     const handleKeyDown = (e) => {
-      if (e.key === 'ArrowLeft') keys.left = true;
-      if (e.key === 'ArrowRight') keys.right = true;
-      if (e.key === 'ArrowUp') keys.up = true;
-      if (e.key === 'ArrowDown') keys.down = true;
-      if (e.key === ' ') keys.space = true;
+      if (e.key === 'ArrowLeft') keys1.left = true;
+      if (e.key === 'ArrowRight') keys1.right = true;
+      if (e.key === 'ArrowUp') keys1.up = true;
+      if (e.key === 'ArrowDown') keys1.down = true;
+      if (e.key === ' ') keys1.space = true;
+      if (e.key === 'Shift') keys1.dash = true;
+      if (e.key === 'Control') keys1.slow = true;
+      if (e.key === 'Alt') keys1.bomb = true;
+      
+      if (e.key === 'a') keys2.left = true;
+      if (e.key === 'd') keys2.right = true;
+      if (e.key === 'w') keys2.up = true;
+      if (e.key === 's') keys2.down = true;
+      if (e.key === 'f') keys2.space = true;
+      if (e.key === 'q') keys2.dash = true;
+      if (e.key === 'e') keys2.slow = true;
+      if (e.key === 'r') keys2.bomb = true;
     };
 
     const handleKeyUp = (e) => {
-      if (e.key === 'ArrowLeft') keys.left = false;
-      if (e.key === 'ArrowRight') keys.right = false;
-      if (e.key === 'ArrowUp') keys.up = false;
-      if (e.key === 'ArrowDown') keys.down = false;
-      if (e.key === ' ') keys.space = false;
+      if (e.key === 'ArrowLeft') keys1.left = false;
+      if (e.key === 'ArrowRight') keys1.right = false;
+      if (e.key === 'ArrowUp') keys1.up = false;
+      if (e.key === 'ArrowDown') keys1.down = false;
+      if (e.key === ' ') keys1.space = false;
+      if (e.key === 'Shift') keys1.dash = false;
+      if (e.key === 'Control') keys1.slow = false;
+      if (e.key === 'Alt') keys1.bomb = false;
+      
+      if (e.key === 'a') keys2.left = false;
+      if (e.key === 'd') keys2.right = false;
+      if (e.key === 'w') keys2.up = false;
+      if (e.key === 's') keys2.down = false;
+      if (e.key === 'f') keys2.space = false;
+      if (e.key === 'q') keys2.dash = false;
+      if (e.key === 'e') keys2.slow = false;
+      if (e.key === 'r') keys2.bomb = false;
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    const shoot = () => {
+    const shoot = (ship, isPlayer1) => {
       const bulletGeometry = new THREE.SphereGeometry(0.15, 8, 8);
       const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
       
-      const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+      const alternateGun = isPlayer1 ? alternateGun1 : alternateGun2;
       
-      if (alternateGun) {
-        bullet.position.set(shipGroup.position.x - 2.5, shipGroup.position.y, shipGroup.position.z - 1);
+      if (currentPowerup === 'spread') {
+        for (let i = -1; i <= 1; i++) {
+          const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+          bullet.position.set(ship.position.x + i * 1.5, ship.position.y, ship.position.z - 1);
+          bullet.userData.active = true;
+          bullet.userData.player = isPlayer1 ? 1 : 2;
+          scene.add(bullet);
+          bullets.push(bullet);
+          createMuzzleFlash(bullet.position.clone());
+        }
+      } else if (currentPowerup === 'laser') {
+        const laserGeometry = new THREE.CylinderGeometry(0.1, 0.1, 50, 8);
+        const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const laser = new THREE.Mesh(laserGeometry, laserMaterial);
+        laser.rotation.x = Math.PI / 2;
+        laser.position.set(ship.position.x, ship.position.y, ship.position.z - 25);
+        laser.userData.active = true;
+        laser.userData.player = isPlayer1 ? 1 : 2;
+        laser.userData.lifetime = 10;
+        laser.userData.age = 0;
+        scene.add(laser);
+        bullets.push(laser);
       } else {
-        bullet.position.set(shipGroup.position.x + 2.5, shipGroup.position.y, shipGroup.position.z - 1);
+        const xOffset = alternateGun ? -2.5 : 2.5;
+        const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+        bullet.position.set(ship.position.x + xOffset, ship.position.y, ship.position.z - 1);
+        bullet.userData.active = true;
+        bullet.userData.player = isPlayer1 ? 1 : 2;
+        scene.add(bullet);
+        bullets.push(bullet);
+        createMuzzleFlash(bullet.position.clone());
       }
       
-      alternateGun = !alternateGun;
-      bullet.userData.active = true;
-      scene.add(bullet);
-      bullets.push(bullet);
+      if (isPlayer1) alternateGun1 = !alternateGun1;
+      else alternateGun2 = !alternateGun2;
       
       playShootSound();
     };
 
-    const startNextLevel = () => {
+    const startNextWave = () => {
       isPaused = true;
       
       setTimeout(() => {
@@ -399,17 +681,31 @@ const SpaceInvaders3D = () => {
         enemies.forEach(enemy => scene.remove(enemy));
         enemies = [];
         
-        currentLevel++;
-        setLevel(currentLevel);
+        currentWave++;
         
-        currentTimeLeft = 60;
-        setTimeLeft(60);
+        if (currentWave > wavesPerLevel) {
+          currentLevel++;
+          currentWave = 1;
+          setLevel(currentLevel);
+          currentTimeLeft = 60;
+          setTimeLeft(60);
+        }
+        
+        setWave(currentWave);
         lastTimeUpdate = Date.now();
         
-        createEnemies(currentLevel);
+        createEnemies(currentLevel, currentWave, formations[currentWave % formations.length]);
         
         isPaused = false;
       }, 2000);
+    };
+
+    const saveHighScore = async (score) => {
+      try {
+        await window.storage.set('space-invaders-highscore', score.toString());
+      } catch (err) {
+        console.error('Failed to save high score:', err);
+      }
     };
 
     const animate = () => {
@@ -422,6 +718,34 @@ const SpaceInvaders3D = () => {
       }
 
       const now = Date.now();
+      
+      nebulaMaterial.uniforms.time.value = now * 0.001;
+      
+      // Update cooldowns
+      if (dashCooldownTime > 0) {
+        dashCooldownTime -= 16 * timeScale;
+        setDashCooldown(Math.max(0, Math.ceil(dashCooldownTime / 1000)));
+      }
+      if (slowCooldownTime > 0) {
+        slowCooldownTime -= 16 * timeScale;
+        setSlowCooldown(Math.max(0, Math.ceil(slowCooldownTime / 1000)));
+      }
+      if (bombCooldownTime > 0) {
+        bombCooldownTime -= 16 * timeScale;
+        setBombCooldown(Math.max(0, Math.ceil(bombCooldownTime / 1000)));
+      }
+      
+      // Update powerup
+      if (currentPowerup && now > powerupEndTime) {
+        currentPowerup = null;
+        setPowerup(null);
+      }
+      
+      // Reset time scale
+      if (timeScale < 1) {
+        timeScale = Math.min(1, timeScale + 0.01);
+      }
+      
       if (now - lastTimeUpdate >= 1000) {
         currentTimeLeft--;
         setTimeLeft(currentTimeLeft);
@@ -433,10 +757,28 @@ const SpaceInvaders3D = () => {
           if (currentLives <= 0) {
             isGameOver = true;
             setGameOver(true);
+            if (currentScore > currentHighScore) {
+              currentHighScore = currentScore;
+              setHighScore(currentScore);
+              saveHighScore(currentScore);
+            }
           } else {
             currentTimeLeft = 60;
             setTimeLeft(60);
           }
+        }
+      }
+
+      if (cameraShake.intensity > 0) {
+        cameraShake.x = (Math.random() - 0.5) * cameraShake.intensity;
+        cameraShake.y = (Math.random() - 0.5) * cameraShake.intensity;
+        camera.position.x = cameraShake.x;
+        camera.position.y = 8 + cameraShake.y;
+        cameraShake.intensity *= 0.9;
+        if (cameraShake.intensity < 0.01) {
+          cameraShake.intensity = 0;
+          camera.position.x = 0;
+          camera.position.y = 8;
         }
       }
 
@@ -453,9 +795,7 @@ const SpaceInvaders3D = () => {
 
       particles.forEach((particle, index) => {
         particle.userData.age++;
-        
         particle.position.add(particle.userData.velocity);
-        
         particle.rotation.x += particle.userData.rotationSpeed.x;
         particle.rotation.y += particle.userData.rotationSpeed.y;
         particle.rotation.z += particle.userData.rotationSpeed.z;
@@ -470,40 +810,127 @@ const SpaceInvaders3D = () => {
         }
       });
 
-      if (keys.left && shipGroup.position.x > -10) {
-        shipGroup.position.x -= 0.15;
-      }
-      if (keys.right && shipGroup.position.x < 10) {
-        shipGroup.position.x += 0.15;
-      }
-      if (keys.up && shipGroup.position.y < 8) {
-        shipGroup.position.y += 0.15;
-      }
-      if (keys.down && shipGroup.position.y > -8) {
-        shipGroup.position.y -= 0.15;
-      }
+      muzzleFlashes.forEach((flash, index) => {
+        flash.userData.age++;
+        flash.material.opacity = 1 - (flash.userData.age / flash.userData.lifetime);
+        if (flash.userData.age >= flash.userData.lifetime) {
+          scene.remove(flash);
+          muzzleFlashes.splice(index, 1);
+        }
+      });
+      
+      // Update powerups
+      powerups.forEach((powerup, index) => {
+        powerup.position.z += powerup.userData.velocity;
+        powerup.rotation.y += 0.05;
+        
+        // Check collision with ships
+        const dist1 = powerup.position.distanceTo(ship1.position);
+        const dist2 = powerup.position.distanceTo(ship2.position);
+        
+        if (dist1 < 1.5 || dist2 < 1.5) {
+          if (powerup.userData.type === 'shield') {
+            currentShield += 3;
+            setShield(currentShield);
+            shield1.visible = true;
+            shield2.visible = true;
+          } else {
+            currentPowerup = powerup.userData.type;
+            powerupEndTime = now + 10000;
+            setPowerup(currentPowerup);
+          }
+          scene.remove(powerup);
+          powerups.splice(index, 1);
+        } else if (powerup.position.z > 15) {
+          scene.remove(powerup);
+          powerups.splice(index, 1);
+        }
+      });
 
+      // Ship 1 controls
+      if (keys1.left && ship1.position.x > -10) ship1.position.x -= 0.15;
+      if (keys1.right && ship1.position.x < 10) ship1.position.x += 0.15;
+      if (keys1.up && ship1.position.y < 8) ship1.position.y += 0.15;
+      if (keys1.down && ship1.position.y > -8) ship1.position.y -= 0.15;
+      
+      // Ship 2 controls
+      if (keys2.left && ship2.position.x > -10) ship2.position.x -= 0.15;
+      if (keys2.right && ship2.position.x < 10) ship2.position.x += 0.15;
+      if (keys2.up && ship2.position.y < 8) ship2.position.y += 0.15;
+      if (keys2.down && ship2.position.y > -8) ship2.position.y -= 0.15;
+
+      // Update crosshairs to follow ships and match enemy depth
       const nearestEnemyZ = enemies.reduce((nearest, enemy) => {
         if (!enemy.userData.alive) return nearest;
         return enemy.position.z > nearest ? enemy.position.z : nearest;
       }, -100);
       
-      leftCrosshairGroup.position.x = shipGroup.position.x - 2.5;
-      leftCrosshairGroup.position.y = shipGroup.position.y;
-      leftCrosshairGroup.position.z = nearestEnemyZ;
+      // Player 1 crosshairs
+      leftCrosshair1.position.x = ship1.position.x - 2.5;
+      leftCrosshair1.position.y = ship1.position.y;
+      leftCrosshair1.position.z = nearestEnemyZ;
       
-      rightCrosshairGroup.position.x = shipGroup.position.x + 2.5;
-      rightCrosshairGroup.position.y = shipGroup.position.y;
-      rightCrosshairGroup.position.z = nearestEnemyZ;
+      rightCrosshair1.position.x = ship1.position.x + 2.5;
+      rightCrosshair1.position.y = ship1.position.y;
+      rightCrosshair1.position.z = nearestEnemyZ;
+      
+      // Player 2 crosshairs
+      leftCrosshair2.position.x = ship2.position.x - 2.5;
+      leftCrosshair2.position.y = ship2.position.y;
+      leftCrosshair2.position.z = nearestEnemyZ;
+      
+      rightCrosshair2.position.x = ship2.position.x + 2.5;
+      rightCrosshair2.position.y = ship2.position.y;
+      rightCrosshair2.position.z = nearestEnemyZ;
 
-      if (keys.space && now - lastShot > 250) {
-        shoot();
-        lastShot = now;
+      // Abilities
+      if (keys1.dash && dashCooldownTime <= 0) {
+        ship1.position.z -= 5;
+        setTimeout(() => { ship1.position.z += 5; }, 200);
+        dashCooldownTime = 5000;
+        keys1.dash = false;
+      }
+      if (keys1.slow && slowCooldownTime <= 0) {
+        timeScale = 0.3;
+        slowCooldownTime = 15000;
+        setTimeout(() => { timeScale = 1; }, 5000);
+        keys1.slow = false;
+      }
+      if (keys1.bomb && bombCooldownTime <= 0) {
+        enemies.forEach(enemy => {
+          if (enemy.userData.alive && enemy.position.z > -30) {
+            enemy.userData.health = 0;
+          }
+        });
+        bombCooldownTime = 20000;
+        shakeScreen(1);
+        keys1.bomb = false;
+      }
+
+      const fireRate = currentPowerup === 'rapid' ? 100 : 250;
+      if (keys1.space && now - lastShot1 > fireRate) {
+        shoot(ship1, true);
+        lastShot1 = now;
+      }
+      if (keys2.space && now - lastShot2 > fireRate) {
+        shoot(ship2, false);
+        lastShot2 = now;
       }
 
       bullets.forEach((bullet, index) => {
         if (!bullet.userData.active) return;
-        bullet.position.z -= 0.6;
+        
+        if (bullet.userData.lifetime !== undefined) {
+          bullet.userData.age++;
+          if (bullet.userData.age >= bullet.userData.lifetime) {
+            bullet.userData.active = false;
+            scene.remove(bullet);
+            bullets.splice(index, 1);
+            return;
+          }
+        }
+        
+        bullet.position.z -= 0.6 * timeScale;
         if (bullet.position.z < -60) {
           bullet.userData.active = false;
           scene.remove(bullet);
@@ -512,16 +939,17 @@ const SpaceInvaders3D = () => {
       });
 
       if (currentLevel >= 2 && enemyBullets.length === 0) {
-        const shootingChance = 0.001 * currentLevel;
+        const shootingChance = 0.001 * currentLevel * timeScale;
         enemies.forEach(enemy => {
           if (!enemy.userData.alive || enemyBullets.length > 0) return;
           if (Math.random() < shootingChance) {
-            const enemyBulletGeometry = new THREE.CylinderGeometry(0.1, 0.1, 5, 8);
+            const enemyBulletGeometry = new THREE.CylinderGeometry(0.2, 0.2, 5, 8);
             const enemyBulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
             const enemyBullet = new THREE.Mesh(enemyBulletGeometry, enemyBulletMaterial);
             enemyBullet.position.copy(enemy.position);
             enemyBullet.rotation.x = Math.PI / 2;
             enemyBullet.userData.active = true;
+            enemyBullet.userData.health = 2;
             scene.add(enemyBullet);
             enemyBullets.push(enemyBullet);
             startAlarm();
@@ -531,34 +959,78 @@ const SpaceInvaders3D = () => {
 
       enemyBullets.forEach((bullet, index) => {
         if (!bullet.userData.active) return;
-        bullet.position.z += 0.4;
+        bullet.position.z += 0.4 * timeScale;
         
-        if (!isInvincible) {
-          const distanceToShip = bullet.position.distanceTo(shipGroup.position);
-          if (distanceToShip < 2) {
+        // Check if player bullets can destroy enemy bullets
+        bullets.forEach((playerBullet, pIndex) => {
+          if (!playerBullet.userData.active) return;
+          const dist = bullet.position.distanceTo(playerBullet.position);
+          if (dist < 1) {
+            bullet.userData.health--;
+            if (bullet.userData.health <= 0) {
+              bullet.userData.active = false;
+              scene.remove(bullet);
+              enemyBullets.splice(index, 1);
+              stopAlarm();
+              createExplosion(bullet.position, new THREE.Color(0xff0000));
+            }
+            playerBullet.userData.active = false;
+            scene.remove(playerBullet);
+            bullets.splice(pIndex, 1);
+          }
+        });
+        
+        if (!isInvincible && bullet.userData.active) {
+          const dist1 = bullet.position.distanceTo(ship1.position);
+          const dist2 = bullet.position.distanceTo(ship2.position);
+          
+          if (dist1 < 2 || dist2 < 2) {
             bullet.userData.active = false;
             scene.remove(bullet);
             enemyBullets.splice(index, 1);
             stopAlarm();
             
-            currentLives--;
-            setLives(currentLives);
+            shakeScreen(0.5);
             
-            if (currentLives <= 0) {
-              isGameOver = true;
-              setGameOver(true);
+            if (currentShield > 0) {
+              currentShield--;
+              setShield(currentShield);
+              if (currentShield === 0) {
+                shield1.visible = false;
+                shield2.visible = false;
+              }
             } else {
-              isInvincible = true;
-              let flickerCount = 0;
-              flickerInterval = setInterval(() => {
-                shipGroup.visible = !shipGroup.visible;
-                flickerCount++;
-                if (flickerCount >= 10) {
-                  clearInterval(flickerInterval);
-                  shipGroup.visible = true;
-                  isInvincible = false;
+              currentLives--;
+              setLives(currentLives);
+              
+              currentCombo = 0;
+              currentMultiplier = 1;
+              setCombo(0);
+              setMultiplier(1);
+              
+              if (currentLives <= 0) {
+                isGameOver = true;
+                setGameOver(true);
+                if (currentScore > currentHighScore) {
+                  currentHighScore = currentScore;
+                  setHighScore(currentScore);
+                  saveHighScore(currentScore);
                 }
-              }, 200);
+              } else {
+                isInvincible = true;
+                let flickerCount = 0;
+                flickerInterval = setInterval(() => {
+                  ship1.visible = !ship1.visible;
+                  ship2.visible = !ship2.visible;
+                  flickerCount++;
+                  if (flickerCount >= 10) {
+                    clearInterval(flickerInterval);
+                    ship1.visible = true;
+                    ship2.visible = true;
+                    isInvincible = false;
+                  }
+                }, 200);
+              }
             }
             return;
           }
@@ -578,42 +1050,76 @@ const SpaceInvaders3D = () => {
 
       enemies.forEach(enemy => {
         if (!enemy.userData.alive) return;
-        enemy.position.z += enemySpeed;
-        enemy.rotation.x += 0.01;
-        enemy.rotation.y += 0.01;
         
-        if (enemy.position.z > 2 && enemy.userData.alive) {
-          currentLives--;
-          setLives(currentLives);
-          if (currentLives <= 0) {
-            isGameOver = true;
-            setGameOver(true);
-          }
+        const moveSpeed = enemySpeed * enemy.userData.speed * timeScale;
+        enemy.position.z += moveSpeed;
+        
+        if (enemy.userData.formation === 'circle') {
+          enemy.userData.circleTime += 0.02 * timeScale;
+          const radius = 10;
+          const angle = enemy.userData.circleTime;
+          enemy.position.x = Math.cos(angle) * radius;
+          enemy.position.y = Math.sin(angle) * radius;
+        } else if (enemy.userData.type === 'zigzag') {
+          enemy.userData.zigzagTime += 0.05 * timeScale;
+          enemy.position.x = enemy.userData.originalX + Math.sin(enemy.userData.zigzagTime) * 3;
+        }
+        
+        enemy.rotation.x += 0.01 * timeScale;
+        enemy.rotation.y += 0.01 * timeScale;
+        
+        // Enemies pass through instead of ending game
+        if (enemy.position.z > 20 && enemy.userData.alive) {
           enemy.userData.alive = false;
-          createExplosion(enemy.position, enemy.userData.color);
           scene.remove(enemy);
         }
       });
 
       bullets.forEach((bullet, bIndex) => {
         if (!bullet.userData.active) return;
-        enemies.forEach((enemy) => {
-          if (!enemy.userData.alive) return;
+        
+        for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
+          const enemy = enemies[eIndex];
+          if (!enemy.userData.alive) continue;
+          
           const distance = bullet.position.distanceTo(enemy.position);
-          if (distance < 1.2) {
+          if (distance < 1.5) {
             bullet.userData.active = false;
             scene.remove(bullet);
             bullets.splice(bIndex, 1);
-            enemy.userData.alive = false;
             
-            createExplosion(enemy.position, enemy.userData.color);
-            playExplosionSound();
+            enemy.userData.health--;
             
-            scene.remove(enemy);
-            currentScore += 10;
-            setScore(currentScore);
+            if (enemy.userData.health <= 0) {
+              enemy.userData.alive = false;
+              createExplosion(enemy.position, enemy.userData.color);
+              createPowerup(enemy.position);
+              playExplosionSound(enemy.userData.type);
+              shakeScreen(0.2);
+              
+              // Properly remove enemy from scene and array
+              scene.remove(enemy);
+              enemies.splice(eIndex, 1);
+              
+              addKill();
+              const points = 10 * currentMultiplier;
+              currentScore += points;
+              setScore(currentScore);
+            } else {
+              const bodyMesh = enemy.children.find(child => child.geometry.type === 'BoxGeometry');
+              if (bodyMesh) {
+                bodyMesh.material.emissive.setRGB(1, 0, 0);
+                setTimeout(() => {
+                  if (enemy.userData.alive && bodyMesh.material) {
+                    const hue = enemy.userData.color.getHSL({}).h;
+                    bodyMesh.material.emissive.setHSL(hue, 1, 0.2);
+                  }
+                }, 100);
+              }
+            }
+            break;
           }
-        });
+        }
       });
 
       const aliveEnemies = enemies.filter(e => e.userData.alive);
@@ -624,7 +1130,7 @@ const SpaceInvaders3D = () => {
         
         playLevelCompleteSound();
         
-        startNextLevel();
+        startNextWave();
       }
 
       renderer.render(scene, camera);
@@ -644,6 +1150,7 @@ const SpaceInvaders3D = () => {
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('resize', handleResize);
       if (flickerInterval) clearInterval(flickerInterval);
+      if (comboTimeout) clearTimeout(comboTimeout);
       stopAlarm();
       mountRef.current?.removeChild(renderer.domElement);
     };
@@ -656,32 +1163,41 @@ const SpaceInvaders3D = () => {
   return (
     <div className="relative w-full h-screen">
       <div ref={mountRef} className="w-full h-full" />
-      <div className="absolute top-4 left-4 text-white font-mono bg-black bg-opacity-70 p-4 rounded">
-        <div className="text-2xl font-bold mb-2">Level {level}</div>
-        <div className="text-xl">Score: {score}</div>
-        <div className="text-xl">Lives: {lives}</div>
-        <div className={`text-xl ${timeLeft <= 10 ? 'text-red-500 font-bold' : ''}`}>
-          Time: {timeLeft}s
+      <div className="absolute top-4 left-4 text-white font-mono bg-black bg-opacity-70 p-4 rounded text-sm">
+        <div className="text-xl font-bold mb-2">Level {level} - Wave {wave}</div>
+        <div>Score: {score}</div>
+        <div>High: {highScore}</div>
+        <div>Lives: {lives}</div>
+        <div>Shield: {shield}</div>
+        <div className={timeLeft <= 10 ? 'text-red-500 font-bold' : ''}>Time: {timeLeft}s</div>
+        {combo > 0 && <div className="text-yellow-400 font-bold">Combo: {combo} x{multiplier}</div>}
+        {powerup && <div className="text-purple-400 font-bold">Powerup: {powerup.toUpperCase()}</div>}
+      </div>
+      
+      <div className="absolute top-4 right-4 text-white font-mono text-xs bg-black bg-opacity-70 p-3 rounded">
+        <div className="font-bold mb-1">Player 1 (Green):</div>
+        <div>←→↑↓: Move | SPACE: Shoot</div>
+        <div>Shift: Dash ({dashCooldown}s)</div>
+        <div>Ctrl: Slow ({slowCooldown}s)</div>
+        <div>Alt: Bomb ({bombCooldown}s)</div>
+        <div className="font-bold mt-2 mb-1">Player 2 (Blue):</div>
+        <div>WASD: Move | F: Shoot</div>
+        <div>Q: Dash | E: Slow | R: Bomb</div>
+        <div className="mt-2 text-yellow-400">
+          <div>Powerups:</div>
+          <div>🔵 Shield | 🟣 Rapid Fire</div>
+          <div>🟡 Spread | 🔴 Laser</div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 text-white font-mono text-sm bg-black bg-opacity-70 p-4 rounded">
-        <div className="font-bold mb-2">Controls:</div>
-        <div>← → ↑ ↓ : Move</div>
-        <div>SPACE: Shoot</div>
-        <div className="mt-3 text-xs text-gray-300">
-          <div>Time bonus: {timeLeft * 5} pts</div>
-        </div>
-      </div>
+      
       {gameOver && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
           <div className="text-center text-white">
             <h1 className="text-6xl font-bold mb-4">GAME OVER</h1>
-            <p className="text-3xl mb-2">Level Reached: {level}</p>
-            <p className="text-3xl mb-8">Final Score: {score}</p>
-            <button
-              onClick={resetGame}
-              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded text-xl"
-            >
+            <p className="text-3xl mb-2">Level {level} - Wave {wave}</p>
+            <p className="text-3xl mb-2">Final Score: {score}</p>
+            {score > highScore && <p className="text-2xl text-yellow-400 mb-4">NEW HIGH SCORE!</p>}
+            <button onClick={resetGame} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded text-xl">
               Play Again
             </button>
           </div>
