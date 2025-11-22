@@ -1,33 +1,36 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
-const SpaceInvaders3D = () => {
-  const mountRef = useRef(null);
-  const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState(0);
-  const [gameOver, setGameOver] = useState(false);
-  const [lives, setLives] = useState(3);
-  const [level, setLevel] = useState(1);
-  const [wave, setWave] = useState(1);
-  const [timeLeft, setTimeLeft] = useState(60);
-  const [combo, setCombo] = useState(0);
-  const [multiplier, setMultiplier] = useState(1);
-  const [shield, setShield] = useState(0);
-  const [powerup, setPowerup] = useState(null);
-  const [dashCooldown, setDashCooldown] = useState(0);
-  const [slowCooldown, setSlowCooldown] = useState(0);
-  const [bombCooldown, setBombCooldown] = useState(0);
+type PowerupType = 'shield' | 'rapid' | 'spread' | 'laser';
+
+const SpaceInvaders3D: React.FC = () => {
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const [score, setScore] = useState<number>(0);
+  const [highScore, setHighScore] = useState<number>(0);
+  const [gameOver, setGameOver] = useState<boolean>(false);
+  const [lives, setLives] = useState<number>(3);
+  const [level, setLevel] = useState<number>(1);
+  const [wave, setWave] = useState<number>(1);
+  const [timeLeft, setTimeLeft] = useState<number>(60);
+  const [combo, setCombo] = useState<number>(0);
+  const [multiplier, setMultiplier] = useState<number>(1);
+  const [shield, setShield] = useState<number>(0);
+  const [powerup, setPowerup] = useState<string | null>(null);
+  const [dashCooldown, setDashCooldown] = useState<number>(0);
+  const [slowCooldown, setSlowCooldown] = useState<number>(0);
+  const [bombCooldown, setBombCooldown] = useState<number>(0);
 
   useEffect(() => {
     if (!mountRef.current) return;
 
     const loadHighScore = async () => {
       try {
-        const result = await window.storage.get('space-invaders-highscore');
-        if (result && result.value) {
-          setHighScore(parseInt(result.value));
+        const saved = localStorage.getItem('space-invaders-highscore');
+        if (saved) {
+          setHighScore(parseInt(saved, 10));
         }
       } catch (err) {
+        // Keep silent if storage is not available
         console.log('No high score found');
       }
     };
@@ -77,35 +80,35 @@ const SpaceInvaders3D = () => {
     const nebula = new THREE.Mesh(nebulaGeometry, nebulaMaterial);
     scene.add(nebula);
 
-    const createShip = (color, emissive) => {
+    const createShip = (color: number, emissive: number) => {
       const shipGroup = new THREE.Group();
-      
+
       const bodyGeometry = new THREE.ConeGeometry(0.5, 2, 4);
       const bodyMaterial = new THREE.MeshPhongMaterial({ color: color, emissive: emissive });
       const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
       body.rotation.x = Math.PI / 2;
       shipGroup.add(body);
-      
+
       const wingGeometry = new THREE.BoxGeometry(2, 0.2, 1);
       const wingMaterial = new THREE.MeshPhongMaterial({ color: color, emissive: emissive });
       const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
       leftWing.position.set(-1.5, 0, 0);
       shipGroup.add(leftWing);
-      
+
       const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
       rightWing.position.set(1.5, 0, 0);
       shipGroup.add(rightWing);
-      
+
       const tipGeometry = new THREE.SphereGeometry(0.15, 8, 8);
       const tipMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, emissive: 0x444400 });
       const leftTip = new THREE.Mesh(tipGeometry, tipMaterial);
       leftTip.position.set(-2.5, 0, 0);
       shipGroup.add(leftTip);
-      
+
       const rightTip = new THREE.Mesh(tipGeometry, tipMaterial);
       rightTip.position.set(2.5, 0, 0);
       shipGroup.add(rightTip);
-      
+
       return shipGroup;
     };
 
@@ -118,16 +121,16 @@ const SpaceInvaders3D = () => {
     scene.add(ship2);
 
     const shieldGeometry = new THREE.SphereGeometry(1.5, 16, 16);
-    const shieldMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0x00ffff, 
-      transparent: true, 
+    const shieldMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      transparent: true,
       opacity: 0.3,
       wireframe: true
     });
     const shield1 = new THREE.Mesh(shieldGeometry, shieldMaterial);
     shield1.visible = false;
     ship1.add(shield1);
-    
+
     const shield2 = new THREE.Mesh(shieldGeometry, shieldMaterial.clone());
     shield2.visible = false;
     ship2.add(shield2);
@@ -135,10 +138,12 @@ const SpaceInvaders3D = () => {
     camera.position.set(0, 8, 12);
     camera.lookAt(0, 0, -10);
 
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    // Make AudioContext creation TS-safe
+    const AudioConstructor: any = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const audioContext: AudioContext = new AudioConstructor();
     let audioInitialized = false;
-    let alarmOscillator = null;
-    let alarmGain = null;
+    let alarmOscillator: OscillatorNode | null = null;
+    let alarmGain: GainNode | null = null;
 
     const initAudio = () => {
       if (!audioInitialized) {
@@ -149,31 +154,38 @@ const SpaceInvaders3D = () => {
 
     const startAlarm = () => {
       if (alarmOscillator) return;
-      
+
       initAudio();
       alarmOscillator = audioContext.createOscillator();
       alarmGain = audioContext.createGain();
-      
+
       alarmOscillator.connect(alarmGain);
       alarmGain.connect(audioContext.destination);
-      
+
       alarmOscillator.type = 'sine';
       alarmOscillator.frequency.value = 880;
-      
-      alarmGain.gain.value = 0.2;
-      
+
+      if (alarmGain) alarmGain.gain.value = 0.2;
+
       alarmOscillator.start();
-      
-      setInterval(() => {
+
+      // store id so we can clear if needed
+      const alarmToggleId = window.setInterval(() => {
         if (alarmOscillator) {
           alarmOscillator.frequency.value = alarmOscillator.frequency.value === 880 ? 1100 : 880;
         }
       }, 200);
+      // keep interval id in alarmGain.userData for cleanup if desired (not necessary here)
+      (alarmGain as any).__toggleId = alarmToggleId;
     };
 
     const stopAlarm = () => {
       if (alarmOscillator) {
-        alarmOscillator.stop();
+        try {
+          alarmOscillator.stop();
+        } catch (e) {
+          // ignore stop errors
+        }
         alarmOscillator = null;
         alarmGain = null;
       }
@@ -183,31 +195,31 @@ const SpaceInvaders3D = () => {
       initAudio();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
-      
+
       oscillator.type = 'square';
       oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.1);
-      
+
       gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-      
+
       oscillator.start(audioContext.currentTime);
       oscillator.stop(audioContext.currentTime + 0.1);
     };
 
-    const playExplosionSound = (enemyType) => {
+    const playExplosionSound = (enemyType: string) => {
       initAudio();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
-      
+
       oscillator.type = 'sawtooth';
-      
+
       if (enemyType === 'tank') {
         oscillator.frequency.setValueAtTime(100, audioContext.currentTime);
         oscillator.frequency.exponentialRampToValueAtTime(30, audioContext.currentTime + 0.3);
@@ -227,41 +239,41 @@ const SpaceInvaders3D = () => {
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
         oscillator.stop(audioContext.currentTime + 0.2);
       }
-      
+
       oscillator.start(audioContext.currentTime);
     };
 
     const playLevelCompleteSound = () => {
       initAudio();
-      
+
       if (audioContext.state === 'suspended') {
         audioContext.resume();
       }
-      
-      [261.63, 329.63, 392.00, 523.25].forEach((freq, i) => {
+
+      [261.63, 329.63, 392.0, 523.25].forEach((freq, i) => {
         setTimeout(() => {
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
-          
+
           oscillator.connect(gainNode);
           gainNode.connect(audioContext.destination);
-          
+
           oscillator.type = 'sine';
           oscillator.frequency.setValueAtTime(freq, audioContext.currentTime);
-          
+
           gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
           gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-          
+
           oscillator.start(audioContext.currentTime);
           oscillator.stop(audioContext.currentTime + 0.5);
         }, i * 150);
       });
     };
 
-    const stars = [];
+    const stars: THREE.Mesh[] = [];
     const starGeometry = new THREE.SphereGeometry(0.05, 4, 4);
     const starMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    
+
     for (let i = 0; i < 200; i++) {
       const star = new THREE.Mesh(starGeometry, starMaterial);
       const angle = Math.random() * Math.PI * 2;
@@ -276,40 +288,40 @@ const SpaceInvaders3D = () => {
     }
 
     // Create crosshairs for both players
-    const createCrosshair = (color) => {
+    const createCrosshair = (color: number) => {
       const group = new THREE.Group();
-      const crosshairMaterial = new THREE.LineBasicMaterial({ 
-        color: color, 
-        transparent: true, 
-        opacity: 0.4 
+      const crosshairMaterial = new THREE.LineBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.4
       });
-      
+
       const verticalGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, -0.4, 0),
         new THREE.Vector3(0, 0.4, 0)
       ]);
       const verticalLine = new THREE.Line(verticalGeometry, crosshairMaterial);
       group.add(verticalLine);
-      
+
       const horizontalGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(-0.4, 0, 0),
         new THREE.Vector3(0.4, 0, 0)
       ]);
       const horizontalLine = new THREE.Line(horizontalGeometry, crosshairMaterial);
       group.add(horizontalLine);
-      
+
       const dotGeometry = new THREE.SphereGeometry(0.06, 8, 8);
-      const dotMaterial = new THREE.MeshBasicMaterial({ 
-        color: color, 
-        transparent: true, 
-        opacity: 0.6 
+      const dotMaterial = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.6
       });
       const dot = new THREE.Mesh(dotGeometry, dotMaterial);
       group.add(dot);
-      
+
       return group;
     };
-    
+
     // Player 1 crosshairs (green)
     const leftCrosshair1 = createCrosshair(0x00ff00);
     const rightCrosshair1 = createCrosshair(0x00ff00);
@@ -317,7 +329,7 @@ const SpaceInvaders3D = () => {
     rightCrosshair1.position.set(2.5, 0, -40);
     scene.add(leftCrosshair1);
     scene.add(rightCrosshair1);
-    
+
     // Player 2 crosshairs (blue)
     const leftCrosshair2 = createCrosshair(0x0000ff);
     const rightCrosshair2 = createCrosshair(0x0000ff);
@@ -326,12 +338,12 @@ const SpaceInvaders3D = () => {
     scene.add(leftCrosshair2);
     scene.add(rightCrosshair2);
 
-    let enemies = [];
-    const bullets = [];
-    const enemyBullets = [];
-    const particles = [];
-    const muzzleFlashes = [];
-    const powerups = [];
+    let enemies: THREE.Group[] = [];
+    const bullets: THREE.Mesh[] = [];
+    const enemyBullets: THREE.Mesh[] = [];
+    const particles: THREE.Mesh[] = [];
+    const muzzleFlashes: THREE.Mesh[] = [];
+    const powerups: THREE.Mesh[] = [];
     const keys1 = { left: false, right: false, up: false, down: false, space: false, dash: false, slow: false, bomb: false };
     const keys2 = { left: false, right: false, up: false, down: false, space: false, dash: false, slow: false, bomb: false };
     let enemySpeed = 0.015;
@@ -345,26 +357,26 @@ const SpaceInvaders3D = () => {
     let currentLives = 3;
     let currentHighScore = 0;
     let currentShield = 0;
-    let currentPowerup = null;
+    let currentPowerup: string | null = null;
     let powerupEndTime = 0;
     let isGameOver = false;
     let isPaused = false;
     let currentTimeLeft = 60;
     let lastTimeUpdate = Date.now();
     let isInvincible = false;
-    let flickerInterval = null;
+    let flickerInterval: number | null = null;
     let cameraShake = { x: 0, y: 0, intensity: 0 };
     let currentCombo = 0;
     let currentMultiplier = 1;
     let lastKillTime = 0;
-    let comboTimeout = null;
+    let comboTimeout: number | null = null;
     let timeScale = 1;
     let dashCooldownTime = 0;
     let slowCooldownTime = 0;
     let bombCooldownTime = 0;
     let wavesPerLevel = 3;
 
-    const shakeScreen = (intensity) => {
+    const shakeScreen = (intensity: number) => {
       cameraShake.intensity = intensity;
     };
 
@@ -380,25 +392,25 @@ const SpaceInvaders3D = () => {
       lastKillTime = now;
       setCombo(currentCombo);
       setMultiplier(currentMultiplier);
-      
-      if (comboTimeout) clearTimeout(comboTimeout);
-      comboTimeout = setTimeout(() => {
+
+      if (comboTimeout) window.clearTimeout(comboTimeout);
+      comboTimeout = window.setTimeout(() => {
         currentCombo = 0;
         currentMultiplier = 1;
         setCombo(0);
         setMultiplier(1);
-      }, 2000);
+      }, 2000) as unknown as number;
     };
 
-    const createExplosion = (position, color) => {
+    const createExplosion = (position: THREE.Vector3, color: THREE.Color) => {
       const particleCount = 8;
       const particleGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
       const particleMaterial = new THREE.MeshBasicMaterial({ color: color });
-      
+
       for (let i = 0; i < particleCount; i++) {
         const particle = new THREE.Mesh(particleGeometry, particleMaterial);
         particle.position.copy(position);
-        
+
         particle.userData.velocity = new THREE.Vector3(
           (Math.random() - 0.5) * 0.3,
           (Math.random() - 0.5) * 0.3,
@@ -411,15 +423,15 @@ const SpaceInvaders3D = () => {
         );
         particle.userData.lifetime = 60;
         particle.userData.age = 0;
-        
+
         scene.add(particle);
         particles.push(particle);
       }
     };
 
-    const createMuzzleFlash = (position) => {
+    const createMuzzleFlash = (position: THREE.Vector3) => {
       const flashGeometry = new THREE.SphereGeometry(0.3, 8, 8);
-      const flashMaterial = new THREE.MeshBasicMaterial({ 
+      const flashMaterial = new THREE.MeshBasicMaterial({
         color: 0xffff00,
         transparent: true,
         opacity: 1
@@ -432,19 +444,19 @@ const SpaceInvaders3D = () => {
       muzzleFlashes.push(flash);
     };
 
-    const createPowerup = (position) => {
+    const createPowerup = (position: THREE.Vector3) => {
       if (Math.random() > 0.3) return;
-      
-      const types = ['shield', 'rapid', 'spread', 'laser'];
-      const type = types[Math.floor(Math.random() * types.length)];
-      
-      const colors = {
+
+      const types: PowerupType[] = ['shield', 'rapid', 'spread', 'laser'];
+      const type = types[Math.floor(Math.random() * types.length)] as PowerupType;
+
+      const colors: Record<PowerupType, number> = {
         shield: 0x00ffff,
         rapid: 0xff00ff,
         spread: 0xffff00,
         laser: 0xff0000
       };
-      
+
       const powerupGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
       const powerupMaterial = new THREE.MeshBasicMaterial({ color: colors[type] });
       const powerup = new THREE.Mesh(powerupGeometry, powerupMaterial);
@@ -455,24 +467,24 @@ const SpaceInvaders3D = () => {
       powerups.push(powerup);
     };
 
-    const createEnemies = (level, wave, formation = 'wall') => {
-      const rows = 3 + Math.floor(level / 2);
-      const cols = 5 + Math.floor(level / 2);
-      const startZ = -40 - (level * 5);
-      
+    const createEnemies = (lvl: number, wv: number, formation: 'wall' | 'circle' | 'v' = 'wall') => {
+      const rows = 3 + Math.floor(lvl / 2);
+      const cols = 5 + Math.floor(lvl / 2);
+      const startZ = -40 - (lvl * 5);
+
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
           const enemyGroup = new THREE.Group();
-          
-          let enemyType = 'normal';
+
+          let enemyType: string = 'normal';
           const rand = Math.random();
-          if (level >= 3 && rand < 0.2) enemyType = 'scout';
-          else if (level >= 5 && rand < 0.15) enemyType = 'tank';
-          else if (level >= 7 && rand < 0.1) enemyType = 'zigzag';
-          
-          const hue = (level * 0.1 + row * 0.1) % 1;
-          let enemyColor, enemyEmissive, scale, health, speed;
-          
+          if (lvl >= 3 && rand < 0.2) enemyType = 'scout';
+          else if (lvl >= 5 && rand < 0.15) enemyType = 'tank';
+          else if (lvl >= 7 && rand < 0.1) enemyType = 'zigzag';
+
+          const hue = (lvl * 0.1 + row * 0.1) % 1;
+          let enemyColor: THREE.Color, enemyEmissive: THREE.Color, scale: number, health: number, speed: number;
+
           if (enemyType === 'scout') {
             enemyColor = new THREE.Color(0xff00ff);
             enemyEmissive = new THREE.Color(0x440044);
@@ -498,50 +510,50 @@ const SpaceInvaders3D = () => {
             health = 1;
             speed = 1;
           }
-          
-          const enemyMaterial = new THREE.MeshPhongMaterial({ 
+
+          const enemyMaterial = new THREE.MeshPhongMaterial({
             color: enemyColor,
             emissive: enemyEmissive
           });
-          
+
           const bodyGeometry = new THREE.BoxGeometry(1.2, 0.8, 0.6);
           const body = new THREE.Mesh(bodyGeometry, enemyMaterial);
           enemyGroup.add(body);
-          
+
           const legGeometry = new THREE.BoxGeometry(0.3, 0.5, 0.3);
           const leftLeg = new THREE.Mesh(legGeometry, enemyMaterial);
           leftLeg.position.set(-0.4, -0.5, 0);
           enemyGroup.add(leftLeg);
-          
+
           const rightLeg = new THREE.Mesh(legGeometry, enemyMaterial);
           rightLeg.position.set(0.4, -0.5, 0);
           enemyGroup.add(rightLeg);
-          
+
           const antennaGeometry = new THREE.BoxGeometry(0.2, 0.4, 0.2);
           const leftAntenna = new THREE.Mesh(antennaGeometry, enemyMaterial);
           leftAntenna.position.set(-0.5, 0.5, 0);
           enemyGroup.add(leftAntenna);
-          
+
           const rightAntenna = new THREE.Mesh(antennaGeometry, enemyMaterial);
           rightAntenna.position.set(0.5, 0.5, 0);
           enemyGroup.add(rightAntenna);
-          
+
           const eyeGeometry = new THREE.BoxGeometry(0.2, 0.2, 0.3);
-          const eyeMaterial = new THREE.MeshPhongMaterial({ 
+          const eyeMaterial = new THREE.MeshPhongMaterial({
             color: 0x000000,
             emissive: enemyEmissive
           });
           const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
           leftEye.position.set(-0.3, 0.1, 0.4);
           enemyGroup.add(leftEye);
-          
+
           const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
           rightEye.position.set(0.3, 0.1, 0.4);
           enemyGroup.add(rightEye);
-          
+
           enemyGroup.scale.set(scale, scale, scale);
-          
-          let xPos, yPos;
+
+          let xPos: number, yPos: number;
           if (formation === 'circle') {
             const angle = (col / cols) * Math.PI * 2;
             const radius = 10;
@@ -549,14 +561,14 @@ const SpaceInvaders3D = () => {
             yPos = Math.sin(angle) * radius;
           } else if (formation === 'v') {
             xPos = col * 2.5 - (cols * 2.5) / 2 + 1.25;
-            yPos = Math.abs(col - cols/2) * 1.5 + row * 2.5 - (rows * 2.5) / 2;
+            yPos = Math.abs(col - cols / 2) * 1.5 + row * 2.5 - (rows * 2.5) / 2;
           } else {
             xPos = col * 2.5 - (cols * 2.5) / 2 + 1.25;
             yPos = row * 2.5 - (rows * 2.5) / 2 + 1.25;
           }
-          
+
           enemyGroup.position.set(xPos, yPos, startZ);
-          
+
           enemyGroup.userData.alive = true;
           enemyGroup.userData.color = enemyColor;
           enemyGroup.userData.type = enemyType;
@@ -568,19 +580,19 @@ const SpaceInvaders3D = () => {
           enemyGroup.userData.originalX = xPos;
           enemyGroup.userData.originalY = yPos;
           enemyGroup.userData.formation = formation;
-          
+
           scene.add(enemyGroup);
           enemies.push(enemyGroup);
         }
       }
-      
-      enemySpeed = 0.015 + (level * 0.005);
+
+      enemySpeed = 0.015 + (lvl * 0.005);
     };
 
-    const formations = ['wall', 'circle', 'v'];
+    const formations: Array<'wall' | 'circle' | 'v'> = ['wall', 'circle', 'v'];
     createEnemies(currentLevel, currentWave, formations[currentWave % formations.length]);
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') keys1.left = true;
       if (e.key === 'ArrowRight') keys1.right = true;
       if (e.key === 'ArrowUp') keys1.up = true;
@@ -589,7 +601,7 @@ const SpaceInvaders3D = () => {
       if (e.key === 'Shift') keys1.dash = true;
       if (e.key === 'Control') keys1.slow = true;
       if (e.key === 'Alt') keys1.bomb = true;
-      
+
       if (e.key === 'a') keys2.left = true;
       if (e.key === 'd') keys2.right = true;
       if (e.key === 'w') keys2.up = true;
@@ -600,7 +612,7 @@ const SpaceInvaders3D = () => {
       if (e.key === 'r') keys2.bomb = true;
     };
 
-    const handleKeyUp = (e) => {
+    const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') keys1.left = false;
       if (e.key === 'ArrowRight') keys1.right = false;
       if (e.key === 'ArrowUp') keys1.up = false;
@@ -609,7 +621,7 @@ const SpaceInvaders3D = () => {
       if (e.key === 'Shift') keys1.dash = false;
       if (e.key === 'Control') keys1.slow = false;
       if (e.key === 'Alt') keys1.bomb = false;
-      
+
       if (e.key === 'a') keys2.left = false;
       if (e.key === 'd') keys2.right = false;
       if (e.key === 'w') keys2.up = false;
@@ -623,12 +635,12 @@ const SpaceInvaders3D = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    const shoot = (ship, isPlayer1) => {
+    const shoot = (ship: THREE.Object3D, isPlayer1: boolean) => {
       const bulletGeometry = new THREE.SphereGeometry(0.15, 8, 8);
       const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-      
+
       const alternateGun = isPlayer1 ? alternateGun1 : alternateGun2;
-      
+
       if (currentPowerup === 'spread') {
         for (let i = -1; i <= 1; i++) {
           const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
@@ -661,28 +673,28 @@ const SpaceInvaders3D = () => {
         bullets.push(bullet);
         createMuzzleFlash(bullet.position.clone());
       }
-      
+
       if (isPlayer1) alternateGun1 = !alternateGun1;
       else alternateGun2 = !alternateGun2;
-      
+
       playShootSound();
     };
 
     const startNextWave = () => {
       isPaused = true;
-      
+
       setTimeout(() => {
         bullets.forEach(bullet => scene.remove(bullet));
         bullets.length = 0;
-        
+
         enemyBullets.forEach(bullet => scene.remove(bullet));
         enemyBullets.length = 0;
-        
+
         enemies.forEach(enemy => scene.remove(enemy));
         enemies = [];
-        
+
         currentWave++;
-        
+
         if (currentWave > wavesPerLevel) {
           currentLevel++;
           currentWave = 1;
@@ -690,19 +702,19 @@ const SpaceInvaders3D = () => {
           currentTimeLeft = 60;
           setTimeLeft(60);
         }
-        
+
         setWave(currentWave);
         lastTimeUpdate = Date.now();
-        
+
         createEnemies(currentLevel, currentWave, formations[currentWave % formations.length]);
-        
+
         isPaused = false;
       }, 2000);
     };
 
-    const saveHighScore = async (score) => {
+    const saveHighScore = async (sc: number) => {
       try {
-        await window.storage.set('space-invaders-highscore', score.toString());
+        localStorage.setItem('space-invaders-highscore', sc.toString());
       } catch (err) {
         console.error('Failed to save high score:', err);
       }
@@ -718,9 +730,9 @@ const SpaceInvaders3D = () => {
       }
 
       const now = Date.now();
-      
+
       nebulaMaterial.uniforms.time.value = now * 0.001;
-      
+
       // Update cooldowns
       if (dashCooldownTime > 0) {
         dashCooldownTime -= 16 * timeScale;
@@ -734,23 +746,23 @@ const SpaceInvaders3D = () => {
         bombCooldownTime -= 16 * timeScale;
         setBombCooldown(Math.max(0, Math.ceil(bombCooldownTime / 1000)));
       }
-      
+
       // Update powerup
       if (currentPowerup && now > powerupEndTime) {
         currentPowerup = null;
         setPowerup(null);
       }
-      
+
       // Reset time scale
       if (timeScale < 1) {
         timeScale = Math.min(1, timeScale + 0.01);
       }
-      
+
       if (now - lastTimeUpdate >= 1000) {
         currentTimeLeft--;
         setTimeLeft(currentTimeLeft);
         lastTimeUpdate = now;
-        
+
         if (currentTimeLeft <= 0) {
           currentLives--;
           setLives(currentLives);
@@ -799,11 +811,11 @@ const SpaceInvaders3D = () => {
         particle.rotation.x += particle.userData.rotationSpeed.x;
         particle.rotation.y += particle.userData.rotationSpeed.y;
         particle.rotation.z += particle.userData.rotationSpeed.z;
-        
+
         const life = 1 - (particle.userData.age / particle.userData.lifetime);
-        particle.material.opacity = life;
-        particle.material.transparent = true;
-        
+        (particle.material as THREE.Material & { opacity?: number }).opacity = life;
+        (particle.material as THREE.Material & { transparent?: boolean }).transparent = true;
+
         if (particle.userData.age >= particle.userData.lifetime) {
           scene.remove(particle);
           particles.splice(index, 1);
@@ -812,37 +824,37 @@ const SpaceInvaders3D = () => {
 
       muzzleFlashes.forEach((flash, index) => {
         flash.userData.age++;
-        flash.material.opacity = 1 - (flash.userData.age / flash.userData.lifetime);
+        (flash.material as THREE.Material & { opacity?: number }).opacity = 1 - (flash.userData.age / flash.userData.lifetime);
         if (flash.userData.age >= flash.userData.lifetime) {
           scene.remove(flash);
           muzzleFlashes.splice(index, 1);
         }
       });
-      
+
       // Update powerups
-      powerups.forEach((powerup, index) => {
-        powerup.position.z += powerup.userData.velocity;
-        powerup.rotation.y += 0.05;
-        
+      powerups.forEach((powerupMesh, index) => {
+        powerupMesh.position.z += powerupMesh.userData.velocity;
+        powerupMesh.rotation.y += 0.05;
+
         // Check collision with ships
-        const dist1 = powerup.position.distanceTo(ship1.position);
-        const dist2 = powerup.position.distanceTo(ship2.position);
-        
+        const dist1 = powerupMesh.position.distanceTo(ship1.position);
+        const dist2 = powerupMesh.position.distanceTo(ship2.position);
+
         if (dist1 < 1.5 || dist2 < 1.5) {
-          if (powerup.userData.type === 'shield') {
+          if (powerupMesh.userData.type === 'shield') {
             currentShield += 3;
             setShield(currentShield);
             shield1.visible = true;
             shield2.visible = true;
           } else {
-            currentPowerup = powerup.userData.type;
+            currentPowerup = powerupMesh.userData.type;
             powerupEndTime = now + 10000;
             setPowerup(currentPowerup);
           }
-          scene.remove(powerup);
+          scene.remove(powerupMesh);
           powerups.splice(index, 1);
-        } else if (powerup.position.z > 15) {
-          scene.remove(powerup);
+        } else if (powerupMesh.position.z > 15) {
+          scene.remove(powerupMesh);
           powerups.splice(index, 1);
         }
       });
@@ -852,7 +864,7 @@ const SpaceInvaders3D = () => {
       if (keys1.right && ship1.position.x < 10) ship1.position.x += 0.15;
       if (keys1.up && ship1.position.y < 8) ship1.position.y += 0.15;
       if (keys1.down && ship1.position.y > -8) ship1.position.y -= 0.15;
-      
+
       // Ship 2 controls
       if (keys2.left && ship2.position.x > -10) ship2.position.x -= 0.15;
       if (keys2.right && ship2.position.x < 10) ship2.position.x += 0.15;
@@ -864,21 +876,21 @@ const SpaceInvaders3D = () => {
         if (!enemy.userData.alive) return nearest;
         return enemy.position.z > nearest ? enemy.position.z : nearest;
       }, -100);
-      
+
       // Player 1 crosshairs
       leftCrosshair1.position.x = ship1.position.x - 2.5;
       leftCrosshair1.position.y = ship1.position.y;
       leftCrosshair1.position.z = nearestEnemyZ;
-      
+
       rightCrosshair1.position.x = ship1.position.x + 2.5;
       rightCrosshair1.position.y = ship1.position.y;
       rightCrosshair1.position.z = nearestEnemyZ;
-      
+
       // Player 2 crosshairs
       leftCrosshair2.position.x = ship2.position.x - 2.5;
       leftCrosshair2.position.y = ship2.position.y;
       leftCrosshair2.position.z = nearestEnemyZ;
-      
+
       rightCrosshair2.position.x = ship2.position.x + 2.5;
       rightCrosshair2.position.y = ship2.position.y;
       rightCrosshair2.position.z = nearestEnemyZ;
@@ -919,7 +931,7 @@ const SpaceInvaders3D = () => {
 
       bullets.forEach((bullet, index) => {
         if (!bullet.userData.active) return;
-        
+
         if (bullet.userData.lifetime !== undefined) {
           bullet.userData.age++;
           if (bullet.userData.age >= bullet.userData.lifetime) {
@@ -929,7 +941,7 @@ const SpaceInvaders3D = () => {
             return;
           }
         }
-        
+
         bullet.position.z -= 0.6 * timeScale;
         if (bullet.position.z < -60) {
           bullet.userData.active = false;
@@ -960,7 +972,7 @@ const SpaceInvaders3D = () => {
       enemyBullets.forEach((bullet, index) => {
         if (!bullet.userData.active) return;
         bullet.position.z += 0.4 * timeScale;
-        
+
         // Check if player bullets can destroy enemy bullets
         bullets.forEach((playerBullet, pIndex) => {
           if (!playerBullet.userData.active) return;
@@ -979,19 +991,19 @@ const SpaceInvaders3D = () => {
             bullets.splice(pIndex, 1);
           }
         });
-        
+
         if (!isInvincible && bullet.userData.active) {
           const dist1 = bullet.position.distanceTo(ship1.position);
           const dist2 = bullet.position.distanceTo(ship2.position);
-          
+
           if (dist1 < 2 || dist2 < 2) {
             bullet.userData.active = false;
             scene.remove(bullet);
             enemyBullets.splice(index, 1);
             stopAlarm();
-            
+
             shakeScreen(0.5);
-            
+
             if (currentShield > 0) {
               currentShield--;
               setShield(currentShield);
@@ -1002,12 +1014,12 @@ const SpaceInvaders3D = () => {
             } else {
               currentLives--;
               setLives(currentLives);
-              
+
               currentCombo = 0;
               currentMultiplier = 1;
               setCombo(0);
               setMultiplier(1);
-              
+
               if (currentLives <= 0) {
                 isGameOver = true;
                 setGameOver(true);
@@ -1019,15 +1031,18 @@ const SpaceInvaders3D = () => {
               } else {
                 isInvincible = true;
                 let flickerCount = 0;
-                flickerInterval = setInterval(() => {
+                flickerInterval = window.setInterval(() => {
                   ship1.visible = !ship1.visible;
                   ship2.visible = !ship2.visible;
                   flickerCount++;
                   if (flickerCount >= 10) {
-                    clearInterval(flickerInterval);
+                    if (flickerInterval) {
+                      window.clearInterval(flickerInterval);
+                    }
                     ship1.visible = true;
                     ship2.visible = true;
                     isInvincible = false;
+                    flickerInterval = null;
                   }
                 }, 200);
               }
@@ -1035,7 +1050,7 @@ const SpaceInvaders3D = () => {
             return;
           }
         }
-        
+
         if (bullet.position.z > 15) {
           bullet.userData.active = false;
           scene.remove(bullet);
@@ -1050,10 +1065,10 @@ const SpaceInvaders3D = () => {
 
       enemies.forEach(enemy => {
         if (!enemy.userData.alive) return;
-        
+
         const moveSpeed = enemySpeed * enemy.userData.speed * timeScale;
         enemy.position.z += moveSpeed;
-        
+
         if (enemy.userData.formation === 'circle') {
           enemy.userData.circleTime += 0.02 * timeScale;
           const radius = 10;
@@ -1064,10 +1079,10 @@ const SpaceInvaders3D = () => {
           enemy.userData.zigzagTime += 0.05 * timeScale;
           enemy.position.x = enemy.userData.originalX + Math.sin(enemy.userData.zigzagTime) * 3;
         }
-        
+
         enemy.rotation.x += 0.01 * timeScale;
         enemy.rotation.y += 0.01 * timeScale;
-        
+
         // Enemies pass through instead of ending game
         if (enemy.position.z > 20 && enemy.userData.alive) {
           enemy.userData.alive = false;
@@ -1077,42 +1092,48 @@ const SpaceInvaders3D = () => {
 
       bullets.forEach((bullet, bIndex) => {
         if (!bullet.userData.active) return;
-        
+
         for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
           const enemy = enemies[eIndex];
           if (!enemy.userData.alive) continue;
-          
+
           const distance = bullet.position.distanceTo(enemy.position);
           if (distance < 1.5) {
             bullet.userData.active = false;
             scene.remove(bullet);
             bullets.splice(bIndex, 1);
-            
+
             enemy.userData.health--;
-            
+
             if (enemy.userData.health <= 0) {
               enemy.userData.alive = false;
               createExplosion(enemy.position, enemy.userData.color);
               createPowerup(enemy.position);
               playExplosionSound(enemy.userData.type);
               shakeScreen(0.2);
-              
+
               // Properly remove enemy from scene and array
               scene.remove(enemy);
               enemies.splice(eIndex, 1);
-              
+
               addKill();
               const points = 10 * currentMultiplier;
               currentScore += points;
               setScore(currentScore);
             } else {
-              const bodyMesh = enemy.children.find(child => child.geometry.type === 'BoxGeometry');
+              // find a Mesh child whose geometry is a BoxGeometry (body)
+              const bodyMesh = enemy.children.find((child: THREE.Object3D) => {
+                const mesh = child as THREE.Mesh;
+                return mesh.geometry !== undefined && (mesh.geometry as any).type === 'BoxGeometry';
+              }) as THREE.Mesh | undefined;
               if (bodyMesh) {
-                bodyMesh.material.emissive.setRGB(1, 0, 0);
+                (bodyMesh.material as THREE.MeshPhongMaterial).emissive.setRGB(1, 0, 0);
                 setTimeout(() => {
                   if (enemy.userData.alive && bodyMesh.material) {
-                    const hue = enemy.userData.color.getHSL({}).h;
-                    bodyMesh.material.emissive.setHSL(hue, 1, 0.2);
+                    const col = enemy.userData.color as THREE.Color;
+                    const hsl = { h: 0, s: 0, l: 0 };
+                    col.getHSL(hsl);
+                    (bodyMesh.material as THREE.MeshPhongMaterial).emissive.setHSL(hsl.h, 1, 0.2);
                   }
                 }, 100);
               }
@@ -1127,9 +1148,9 @@ const SpaceInvaders3D = () => {
         const timeBonus = currentTimeLeft * 5;
         currentScore += timeBonus;
         setScore(currentScore);
-        
+
         playLevelCompleteSound();
-        
+
         startNextWave();
       }
 
@@ -1149,8 +1170,8 @@ const SpaceInvaders3D = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('resize', handleResize);
-      if (flickerInterval) clearInterval(flickerInterval);
-      if (comboTimeout) clearTimeout(comboTimeout);
+      if (flickerInterval) window.clearInterval(flickerInterval);
+      if (comboTimeout) window.clearTimeout(comboTimeout);
       stopAlarm();
       mountRef.current?.removeChild(renderer.domElement);
     };
@@ -1173,7 +1194,7 @@ const SpaceInvaders3D = () => {
         {combo > 0 && <div className="text-yellow-400 font-bold">Combo: {combo} x{multiplier}</div>}
         {powerup && <div className="text-purple-400 font-bold">Powerup: {powerup.toUpperCase()}</div>}
       </div>
-      
+
       <div className="absolute top-4 right-4 text-white font-mono text-xs bg-black bg-opacity-70 p-3 rounded">
         <div className="font-bold mb-1">Player 1 (Green):</div>
         <div>←→↑↓: Move | SPACE: Shoot</div>
@@ -1189,7 +1210,7 @@ const SpaceInvaders3D = () => {
           <div>🟡 Spread | 🔴 Laser</div>
         </div>
       </div>
-      
+
       {gameOver && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-90">
           <div className="text-center text-white">
